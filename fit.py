@@ -1,10 +1,16 @@
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
+
+import string
 import json
 import re
-import string
+import os
+
+from timeit import default_timer as timer
+
+import pandas as pd
+
 from sklearn.feature_extraction import text
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import MiniBatchKMeans
 
 def clean(s):
     # remove non-ASCII characters
@@ -54,6 +60,8 @@ def load_json_data(path, n):
 #     print(row) 
 
 
+# Here I build our list of stop words. I start with text.ENGLISH_STOP_WORDS, the EnglisH stop words provided by sklearn, and then I add some scientific research
+# stop words as well as some numeric strings.
 STOP_WORDS = text.ENGLISH_STOP_WORDS.union(
     ['et', 'al', 'etal', 'phys', 'rev', 'lett', 'comment', 'review', 'using', 'uses', 'used', 'use',
      'new', 'method', 'proposed', 'results', 'based', 'paper', 'problem', 'bf',
@@ -63,6 +71,11 @@ STOP_WORDS = text.ENGLISH_STOP_WORDS.union(
     + [str(i) for i in range(101)])
 
 
+
+# when I convert the paper categories (e.g. "math.CO cs.CG") into binary
+# columns (e.g. "has_category_math.CO" "has_category_cs.CG"), I'd like to
+# give the column names a prefix so they're easy to identify later.  this is
+# that prefix.
 CATEGORY_DUMMIES_PREFIX = 'has_category_'
 
     
@@ -78,6 +91,7 @@ def load_data(data_path, n):
     # dummies_df only has the category binary columns, not any of the other data
     # like year, title, or abstract, so I paste them together and store in df_categories.
     dummies_df = initial_df.categories.str.get_dummies(' ').add_prefix(CATEGORY_DUMMIES_PREFIX)
+    #  axis=1 stands for columns.  axis=0 would be rows. Here new columns are added.
     df_categories = pd.concat([initial_df, dummies_df], axis=1)
     return df_categories
 
@@ -97,4 +111,45 @@ def main():
     )
     # read the data (year, title, categories, abstract) from the JSON data file.
     data = load_data(json_path, 100000)
-    print(data, 'data')
+    # run the ML algorithms on that data using the specified parameters.
+    # TFIDF and k-means
+    result = run_one(data, params)
+    # show the number of papers in and the most significant words for
+    # each cluster.
+    return result
+
+
+# run the ML algorithms on the data and return the results (including labels).
+def run_one(data, params):
+    max_features = params['max_features']
+    min_df = params['min_df']
+    max_df = params['max_df']
+    ngram_max = params['ngram_max']
+    n_clusters = params['n_clusters']
+    n_init = params['n_init']
+
+    # get the abstracts out.
+    abstracts = data.abstract
+    # set up the TFIDF vectorizer using our custom stop words.
+    # ngram_range=(1, ngram_max) means we're using each group of N consecutive
+    # words as a term, N from 1 to ngram_max.
+    # max_features - take only the top max_features terms by frequency.  we set this
+    #   to limit the number of features to keep CPU/memory reasonable.
+    # min_df - ignore terms that appear in less than min_df proportion of documents.
+    #   these words are too rare to help find patterns in the data.
+    # max_df - ignore terms that appear in more than max_df proportion of documents.
+    #   these words are too common, also known as corpus-specific stop words.
+    TFIDF = TfidfVectorizer(stop_words=STOP_WORDS, ngram_range=(1,ngram_max), max_features=max_features, min_df=int(min_df) if min_df==int(min_df) else float(min_df), max_df=float(max_df))
+    # compute TFIDF values for the abstracts.
+    TFIDFtext = TFIDF.fit_transform(abstracts)
+    # sklearn recommends a batch size of 256 * core count
+    batch_size = 256 * os.cpu_count()
+    # use MiniBatchKMeans because it's faster than KMeans.
+    # n_init - KMeans and MiniBatchKMeans start with random centroids that
+    #   affect the algorithm result.  it will try n_init different ones and use
+    #   the best.
+    label = MiniBatchKMeans(batch_size=batch_size, n_clusters=n_clusters, n_init=n_init, random_state=0).fit_predict(TFIDFtext)
+    return dict(df=data, feature_names=TFIDF.get_feature_names(), tfidf_mat=TFIDFtext, label=label)
+
+if __name__ == '__main__':
+    result = main()
