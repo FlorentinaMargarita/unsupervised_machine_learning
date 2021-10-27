@@ -114,9 +114,20 @@ def main():
     # run the ML algorithms on that data using the specified parameters.
     # TFIDF and k-means
     result = run_one(data, params)
-    # show the number of papers in and the most significant words for
-    # each cluster.
+    show_cluster_word_info(result)
     return result
+
+# show the number of papers in and the most significant words for each cluster.
+def show_cluster_word_info(result):
+    for cluster_id, article_count in get_article_count_per_cluster(result):
+        cluster_words = get_top_cluster_words(result, cluster_id, 10)
+        print(f'{cluster_id}: {article_count} {", ".join(w for w,_ in cluster_words)}')
+
+# show the title of each paper in a given cluster.
+def show_titles_for_cluster(result, cluster):
+    with pd.option_context('display.max_colwidth', None, 'display.max_rows', None):
+        print(result['df'].iloc[np.where(result['label'] == cluster)].title)
+
 
 
 # run the ML algorithms on the data and return the results (including labels).
