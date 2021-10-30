@@ -13,6 +13,10 @@ from sklearn.cluster import MiniBatchKMeans
 from fit import load_data, STOP_WORDS
 
 def run_and_plot(data):
+# data is the pandas dataframe that contains all of the data: year,
+# title, categories, and abstracts for the first 2000 articles. I get
+# the abstracts in the next line, abstracts = data.abstract.  .shape is
+# a field on all pandas dataframes that indicates how big it is.
     n_samples = data.shape[0]
     abstracts = data.abstract
     n_init = 10
@@ -33,6 +37,9 @@ def run_and_plot(data):
     features = ['n_clusters', 'min_df', 'max_features']
     feature_combination_i = 0
     n_feature_value_combinations = 0
+
+    #Below there are combination of two features, drawn from the set of all features. 
+
     for feature1, feature2 in itertools.combinations(features, 2):
         n_feature_value_combinations += len(ranges[feature1]) * len(ranges[feature2])
     start_time = timer()
@@ -40,6 +47,9 @@ def run_and_plot(data):
         xs = []
         ys = []
         zs = []
+        # ranges.keys() is the list of keys in the ranges dict; in this case,
+        # ['n_clusters', 'min_df', 'max_features']. set() converts it into a
+        # set, and once the set is there it can "subtract" another set from it.
         remaining_features = set(ranges.keys()) - {feature1, feature2}
         for value1 in ranges[feature1]:
             for value2 in ranges[feature2]:
